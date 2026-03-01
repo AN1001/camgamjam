@@ -5,6 +5,9 @@
 const LEVELS = [
   { path: "levels/level1.txt", name: "Level 1" },
   { path: "levels/level2.txt", name: "Level 2" },
+  { path: "levels/level3.txt", name: "Level 3" },
+  { path: "levels/level4.txt", name: "Level 4" },
+  { path: "levels/level5.txt", name: "Level 5" },
   // Add more levels here — progression is automatic.
 ];
 
@@ -23,19 +26,16 @@ const LEVELS = [
                              Return [] to cancel the move entirely.
   ═══════════════════════════════════════════════════════════ */
 const RULES = {
+  // ── Priority 10: Filters (run first) ─────────────────────────
+  // Filters remove moves from the list. Running them before
+  // transformers means e.g. "No Left + Reverse" blocks right
+  // (the intended left is reversed to right, then filtered out).
   1: {
     name: "No Left",
     description: "You cannot move left.",
     color: "#ce4a4a",
     priority: 10,
     applyToMoves: (moves) => moves.filter((m) => !(m.dx === -1 && m.dy === 0)),
-  },
-  2: {
-    name: "Echo Step",
-    description: "Every move is repeated twice.",
-    color: "#ce9a30",
-    priority: 10,
-    applyToMoves: (moves) => moves.flatMap((m) => [m, m]),
   },
   3: {
     name: "No Right",
@@ -44,6 +44,16 @@ const RULES = {
     priority: 10,
     applyToMoves: (moves) => moves.filter((m) => !(m.dx === 1 && m.dy === 0)),
   },
+  9: {
+    name: "No Vertical",
+    description: "You cannot move up or down.",
+    color: "#8ace4a",
+    priority: 10,
+    applyToMoves: (moves) => moves.filter((m) => m.dy === 0),
+  },
+  // ── Priority 20: Transformers (run second) ───────────────────
+  // Transformers remap moves. Running after filters means the
+  // filter already removed disallowed directions before remapping.
   4: {
     name: "Flip Y",
     description: "Up and down are swapped.",
@@ -52,35 +62,21 @@ const RULES = {
     applyToMoves: (moves) => moves.map((m) => ({ dx: m.dx, dy: -m.dy })),
   },
   5: {
-    name: "Invert",
+    name: "Reverse",
     description: "All directions are inverted.",
     color: "#ce4a8a",
     priority: 20,
     applyToMoves: (moves) => moves.map((m) => ({ dx: -m.dx, dy: -m.dy })),
   },
-  6: {
-    name: "Slip",
-    description: "You slide three spaces instead of one.",
-    color: "#4acece",
-    // flatMap lets us easily multiply a single input into multiple sequential steps
-    applyToMoves: (moves) => moves.flatMap((m) => [m, m, m]),
+  // ── Priority 30: Multipliers (run last) ──────────────────────
+  2: {
+    name: "Echo Step",
+    description: "Every move is repeated twice.",
+    color: "#ce9a30",
+    priority: 30,
+    applyToMoves: (moves) => moves.flatMap((m) => [m, m]),
   },
-  7: {
-    name: "Rotate Right",
-    description: "Every move is rotated 90 degrees clockwise.",
-    color: "#8a4ace",
-    priority: 20,
-    // A standard 2D rotation matrix applied to the movement vector
-    applyToMoves: (moves) => moves.map((m) => ({ dx: -m.dy, dy: m.dx })),
-  },
-  8: {
-    name: "No Vertical",
-    description: "You cannot move up or down.",
-    color: "#8ace4a",
-    priority: 10,
-    applyToMoves: (moves) => moves.filter((m) => m.dy === 0),
-  },
-  // Add more rules here — no other code needs to change.
+  // Add more rules here. priority: 10=filter, 20=transform, 30=multiply
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -133,21 +129,15 @@ const TILE_UNKNOWN = {
 const RuleEngine = (() => {
   const activeRules = new Set();
 
-  // Inside RuleEngine...
   function processMoves(dx, dy) {
     let moves = [{ dx, dy }];
-
-    // Sort active rules so Filters run before Transformers
+    // Sort active rules by priority so filters run before transformers
+    // before multipliers, regardless of collection order.
     const pipeline = Array.from(activeRules).sort((a, b) => {
-      const priA = RULES[a].priority || 50;
-      const priB = RULES[b].priority || 50;
-      return priA - priB;
+      return (RULES[a].priority || 50) - (RULES[b].priority || 50);
     });
-
     for (const id of pipeline) {
-      if (RULES[id].applyToMoves) {
-        moves = RULES[id].applyToMoves(moves);
-      }
+      moves = RULES[id].applyToMoves(moves);
     }
     return moves;
   }
@@ -155,14 +145,11 @@ const RuleEngine = (() => {
   function activate(ruleId) {
     if (RULES[ruleId]) activeRules.add(ruleId);
   }
-  function isActive(ruleId) {
-    return activeRules.has(ruleId);
-  }
   function clear() {
     activeRules.clear();
   }
 
-  return { processMoves, activate, isActive, clear };
+  return { processMoves, activate, clear };
 })();
 
 /* ═══════════════════════════════════════════════════════════
@@ -200,7 +187,17 @@ function parseLevel(text, name) {
     });
   });
 
-  return { grid, width, height, spawnX, spawnY, name, tabletRuleIds };
+  const originalGrid = grid.map((row) => [...row]);
+  return {
+    grid,
+    originalGrid,
+    width,
+    height,
+    spawnX,
+    spawnY,
+    name,
+    tabletRuleIds,
+  };
 }
 
 function getTile(level, x, y) {
@@ -218,19 +215,34 @@ function createPlayer(x, y) {
 
 /* ═══════════════════════════════════════════════════════════
      INPUT MANAGER
+     Supports both tap (justPressed) and held-key repeat.
+     Held movement: fires immediately on keydown, then waits
+     REPEAT_DELAY ms before firing again every REPEAT_INTERVAL ms.
   ═══════════════════════════════════════════════════════════ */
 const Input = (() => {
-  const held = new Set(),
-    consumed = new Set();
+  const REPEAT_DELAY = 100; // ms after first press before repeat begins
+  const REPEAT_INTERVAL = 150; // ms between each repeated step
+
+  const held = new Set();
+  const consumed = new Set(); // for justPressed
+  const pendingFire = new Set(); // keys that need an immediate first fire
+  const repeatAt = {}; // code -> timestamp of next repeat fire
 
   window.addEventListener("keydown", (e) => {
-    held.add(e.code);
+    if (!held.has(e.code)) {
+      held.add(e.code);
+      pendingFire.add(e.code); // fire on very next frame
+      repeatAt[e.code] = performance.now() + REPEAT_DELAY; // then start repeat
+    }
   });
   window.addEventListener("keyup", (e) => {
     held.delete(e.code);
     consumed.delete(e.code);
+    pendingFire.delete(e.code);
+    delete repeatAt[e.code];
   });
 
+  // True once per physical keydown (used for non-movement actions).
   function justPressed(code) {
     if (held.has(code) && !consumed.has(code)) {
       consumed.add(code);
@@ -239,7 +251,22 @@ const Input = (() => {
     return false;
   }
 
-  return { justPressed };
+  // True on the first frame a key goes down (immediate tap response),
+  // then true again every REPEAT_INTERVAL ms while held.
+  function heldFire(code, now) {
+    if (!held.has(code)) return false;
+    if (pendingFire.has(code)) {
+      pendingFire.delete(code);
+      return true;
+    }
+    if (now >= repeatAt[code]) {
+      repeatAt[code] = now + REPEAT_INTERVAL;
+      return true;
+    }
+    return false;
+  }
+
+  return { justPressed, heldFire };
 })();
 
 /* ═══════════════════════════════════════════════════════════
@@ -277,9 +304,7 @@ const Screen = (() => {
 
   function showLevelComplete(finishedName, nextName) {
     lcLevelName.textContent = finishedName;
-    lcNextLabel.textContent = nextName
-      ? `Up next: ${nextName}`
-      : "Final level — you're almost there!";
+    lcNextLabel.textContent = `Up next: ${nextName}`;
     showPanel(panelLevelDone);
   }
 
@@ -383,8 +408,8 @@ function renderLevel(ctx, level, time) {
       const tile = getTile(level, x, y);
       const px = x * TILE_SIZE;
       const py = y * TILE_SIZE;
-      if (tile.isExit) drawExit(ctx, px, py, time);
-      if (tile.isTablet) drawTablet(ctx, px, py, tile, time);
+      if (tile.isExit) drawExit(ctx, px, py);
+      if (tile.isTablet) drawTablet(ctx, px, py, tile);
     }
   }
 }
@@ -515,7 +540,7 @@ function drawWallShadow(ctx, level, gx, gy) {
 // ── Exit tile — a flag on a stone base ─────────────────────
 //  Stone base drawn as a small 2.5D block.
 //  Tall iron pole. Rectangular banner flies to the right.
-function drawExit(ctx, px, py, time) {
+function drawExit(ctx, px, py) {
   const cx = px + TILE_SIZE / 2;
 
   // ── Stone base — 2.5D mini-block centred at bottom of tile ──
@@ -610,89 +635,98 @@ function drawExit(ctx, px, py, time) {
   ctx.fillRect(flagX, flagY, 2, flagH);
 }
 
-// ── Stone tablet tile ───────────────────────────────────────
-// A chiselled stone slab with the rule number carved in.
-// No animations — static, physical appearance only.
-function drawTablet(ctx, px, py, tile, time) {
-  const rule = RULES[tile.ruleId];
+// ── Paper note tile ─────────────────────────────────────────
+// A small dark piece of paper with a torn/folded corner,
+// and the rule number glowing in neon.
+function drawTablet(ctx, px, py, tile) {
+  const { ruleId } = tile;
+  const rule = RULES[ruleId];
   if (!rule) return;
-
-  const cx = px + TILE_SIZE / 2;
-  const cy = py + TILE_SIZE / 2;
   const [r, g, b] = hexToRgb(rule.color);
 
-  // Stone slab body — two-tone layered stone
-  ctx.fillStyle = "#1e160a";
-  ctx.fillRect(px + 3, py + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-  ctx.fillStyle = "#2a1e0e";
-  ctx.fillRect(px + 4, py + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+  // Paper dimensions — slightly off-centre to feel placed, not stamped
+  const PW = 20;
+  const PH = 24;
+  const ox = px + 6;
+  const oy = py + 4;
+  const cx = ox + PW / 2;
+  const cy = oy + PH / 2 + 2;
 
-  // Chiselled edge: top-left highlight, bottom-right shadow
-  ctx.fillStyle = "rgba(255,220,150,0.13)";
-  ctx.fillRect(px + 4, py + 4, TILE_SIZE - 8, 1); // top
-  ctx.fillRect(px + 4, py + 4, 1, TILE_SIZE - 8); // left
-  ctx.fillStyle = "rgba(0,0,0,0.40)";
-  ctx.fillRect(px + 4, py + TILE_SIZE - 5, TILE_SIZE - 8, 1); // bottom
-  ctx.fillRect(px + TILE_SIZE - 5, py + 4, 1, TILE_SIZE - 8); // right
+  // Drop shadow
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(ox + 2, oy + 2, PW, PH);
 
-  // Static ruled border in the rule's colour (no animation)
-  ctx.strokeStyle = `rgba(${r},${g},${b},0.55)`;
+  // Paper body — very dark, near-black with a hint of colour
+  ctx.fillStyle = "#0d0d12";
+  ctx.fillRect(ox, oy, PW, PH);
+
+  // Fold crease — faint diagonal line from top-right corner
+  const foldSize = 5;
+  ctx.fillStyle = "#1a1a22";
+  // Folded-corner triangle (top-right)
+  ctx.beginPath();
+  ctx.moveTo(ox + PW - foldSize, oy);
+  ctx.lineTo(ox + PW, oy);
+  ctx.lineTo(ox + PW, oy + foldSize);
+  ctx.closePath();
+  ctx.fill();
+  // Crease line
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(px + 3.5, py + 3.5, TILE_SIZE - 7, TILE_SIZE - 7);
+  ctx.beginPath();
+  ctx.moveTo(ox + PW - foldSize, oy);
+  ctx.lineTo(ox + PW, oy + foldSize);
+  ctx.stroke();
 
-  // Carved horizontal lines above and below the number
-  ctx.fillStyle = `rgba(${r},${g},${b},0.18)`;
-  ctx.fillRect(px + 7, py + 10, TILE_SIZE - 14, 1);
-  ctx.fillRect(px + 7, py + 22, TILE_SIZE - 14, 1);
-  // Chisel highlight on each carved line
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
-  ctx.fillRect(px + 7, py + 9, TILE_SIZE - 14, 1);
-  ctx.fillRect(px + 7, py + 21, TILE_SIZE - 14, 1);
+  // Thin border — very subtle
+  ctx.strokeStyle = "rgba(255,255,255,0.07)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ox + 0.5, oy + 0.5, PW - 1, PH - 1);
 
-  // Carved number — dark indent with a light highlight above it
-  // (looks like it's cut into the stone rather than painted on)
-  ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
-  ctx.font = "bold 13px Courier New";
+  // Neon number — three passes: wide outer glow, tighter glow, crisp centre
+  ctx.font = "bold 15px Courier New";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // Shadow pass (the cut)
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillText(tile.ruleId, cx + 1, cy + 2);
-  // Colour pass
-  ctx.fillStyle = `rgba(${r},${g},${b},0.90)`;
-  ctx.fillText(tile.ruleId, cx, cy + 1);
-  // Highlight pass (light catching top edge of cut)
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
-  ctx.fillText(tile.ruleId, cx - 0.5, cy);
 
+  // Outer diffuse glow (shadowBlur on a canvas context)
+  ctx.shadowColor = `rgba(${r},${g},${b},0.9)`;
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = `rgba(${r},${g},${b},0.5)`;
+  ctx.fillText(ruleId, cx, cy);
+
+  // Mid glow
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = `rgba(${r},${g},${b},0.8)`;
+  ctx.fillText(ruleId, cx, cy);
+
+  // Bright centre
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = `rgb(${Math.min(r + 80, 255)},${Math.min(
+    g + 80,
+    255
+  )},${Math.min(b + 80, 255)})`;
+  ctx.fillText(ruleId, cx, cy);
+
+  // Reset shadow so it doesn't bleed onto other draw calls
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
 }
 
-// ── Player — a stone block (top-down 3/4 view) ─────────────
-//
-//  Drawn as a classic top-down RPG block:
-//    top face  — large, dominant, lit from above-left
-//    front face — narrow dark strip at the bottom (facing viewer)
-//  No right face needed at this viewing angle.
-//  A chiselled X is carved into the centre of the top face.
-//
 function renderPlayer(ctx, player, time) {
   const T = TILE_SIZE;
   const px = player.x * T;
   const py = player.y * T;
-
   // Base outer square
   ctx.fillStyle = player.color;
   ctx.fillRect(px + 4, py + 4, T - 8, T - 8);
-
   // Bright inner border
   ctx.strokeStyle = player.borderColor;
   ctx.lineWidth = 2;
   ctx.strokeRect(px + 6, py + 6, T - 12, T - 12);
-
-  // Gentle pulsing center using the animation loop time
-  const pulseOffset = Math.sin(100 / 200) * 1.5;
+  // Gentle pulsing centre
+  const pulseOffset = Math.sin(0.5) * 1.5; // fixed value, no animation
   ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
   ctx.fillRect(
     px + 12 - pulseOffset,
@@ -714,7 +748,6 @@ function hexToRgb(hex) {
 const Game = (() => {
   const canvas = document.getElementById("game-canvas");
   const ctx = canvas.getContext("2d");
-  const posEl = document.getElementById("pos-display");
   const nameEl = document.getElementById("level-name");
 
   let level = null;
@@ -756,36 +789,39 @@ const Game = (() => {
     const nextIndex = levelIndex + 1;
     const hasNext = nextIndex < LEVELS.length;
 
-    Screen.showLevelComplete(
-      LEVELS[levelIndex].name,
-      hasNext ? LEVELS[nextIndex].name : null
-    );
+    if (!hasNext) {
+      Screen.showGameComplete();
+      return;
+    }
+    Screen.showLevelComplete(LEVELS[levelIndex].name, LEVELS[nextIndex].name);
 
     const btn = document.getElementById("btn-next-level");
     btn.onclick = async () => {
-      if (hasNext) {
-        levelIndex = nextIndex;
-        await loadAndStart(LEVELS[levelIndex].path, LEVELS[levelIndex].name);
-        Screen.hide();
-        accepting = true;
-      } else {
-        Screen.showGameComplete();
-      }
+      levelIndex = nextIndex;
+      await loadAndStart(LEVELS[levelIndex].path, LEVELS[levelIndex].name);
+      Screen.hide();
+      accepting = true;
     };
   }
 
   // ── Input → rule pipeline → execute steps ──────────────────
-  function handleInput() {
+  function handleInput(now) {
+    // R key restarts level regardless of accepting state
+    if (Input.justPressed("KeyR")) {
+      restartLevel();
+      return;
+    }
+
     if (!accepting) return;
 
     let dx = 0,
       dy = 0;
-    if (Input.justPressed("ArrowUp") || Input.justPressed("KeyW")) dy = -1;
-    else if (Input.justPressed("ArrowDown") || Input.justPressed("KeyS"))
+    if (Input.heldFire("ArrowUp", now) || Input.heldFire("KeyW", now)) dy = -1;
+    else if (Input.heldFire("ArrowDown", now) || Input.heldFire("KeyS", now))
       dy = 1;
-    else if (Input.justPressed("ArrowLeft") || Input.justPressed("KeyA"))
+    else if (Input.heldFire("ArrowLeft", now) || Input.heldFire("KeyA", now))
       dx = -1;
-    else if (Input.justPressed("ArrowRight") || Input.justPressed("KeyD"))
+    else if (Input.heldFire("ArrowRight", now) || Input.heldFire("KeyD", now))
       dx = 1;
     else return;
 
@@ -796,11 +832,10 @@ const Game = (() => {
   // ── Main loop ───────────────────────────────────────────────
   function loop(time) {
     if (level && player) {
-      handleInput();
+      handleInput(time);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       renderLevel(ctx, level, time);
       renderPlayer(ctx, player, time);
-      posEl.textContent = `${player.x}, ${player.y}`;
     }
     requestAnimationFrame(loop);
   }
@@ -816,27 +851,32 @@ const Game = (() => {
     console.log(`Loaded "${level.name}" — ${level.width}×${level.height}`);
   }
 
+  // ── Restart the current level from scratch ─────────────────
+  // Resets grid from the stored originalGrid — no network fetch needed.
+  function restartLevel() {
+    Screen.hide();
+    level.grid = level.originalGrid.map((row) => [...row]);
+    player = createPlayer(level.spawnX, level.spawnY);
+    RuleEngine.clear();
+    Sidebar.init(level);
+    nameEl.textContent = level.name;
+    accepting = true;
+  }
+
   // ── Boot ────────────────────────────────────────────────────
   async function init() {
-    // Pre-load the first level silently so the canvas is ready
-    // behind the start screen
     await loadAndStart(LEVELS[0].path, LEVELS[0].name);
     requestAnimationFrame(loop);
 
-    // Show start screen; begin on button click
+    // Start screen
     Screen.showStart();
     document.getElementById("btn-start").onclick = () => {
       Screen.hide();
       accepting = true;
     };
 
-    document.getElementById("btn-restart-level").onclick = async () => {
-      // Only allow restart if the game is actively playing (not on a menu screen)
-      if (!accepting) return;
-
-      console.log(`Restarting ${LEVELS[levelIndex].name}...`);
-      await loadAndStart(LEVELS[levelIndex].path, LEVELS[levelIndex].name);
-    };
+    // Restart current level (in-game button, always available)
+    document.getElementById("btn-restart-level").onclick = () => restartLevel();
 
     // Game-complete restart button
     document.getElementById("btn-restart").onclick = async () => {
