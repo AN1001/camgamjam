@@ -203,6 +203,7 @@ body {
   font-size: 12px;
   color: var(--ui-text);
   letter-spacing: 0.1em;
+  line-height: 25px;
   text-transform: uppercase;
   pointer-events: none;
   z-index: 10;
@@ -210,32 +211,6 @@ body {
 
 #level-name {
   color: var(--accent);
-  line-height: 20px;
-}
-
-/* ─────────────────────────────────────────────
-   UI Buttons
-───────────────────────────────────────────── */
-.ui-btn {
-  background: transparent;
-  border: 1px solid var(--ui-border);
-  color: var(--ui-text);
-  font-family: var(--font-pixel);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  margin-left: 16px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-
-  /* Crucial: Re-enables clicking inside the disabled overlay */
-  pointer-events: auto;
-}
-
-.ui-btn:hover {
-  background: var(--ui-border);
-  color: #ffffff;
 }
 
 /* ─────────────────────────────────────────────
@@ -357,6 +332,21 @@ body {
   text-transform: uppercase;
 }
 
-#pos-display {
-  display: none;
+/* ── Restart level button (in UI overlay) ── */
+#btn-restart-level {
+  pointer-events: all;
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  color: #5a5a8a;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+#btn-restart-level:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
