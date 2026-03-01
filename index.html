@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Game</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="ui-overlay">
+      <span id="level-name">Level 1</span>
+      <span id="pos-display">0, 0</span>
+      <button id="btn-restart-level" class="ui-btn">Restart</button>
+    </div>
+
+    <div id="layout">
+      <canvas id="game-canvas"></canvas>
+
+      <aside id="sidebar">
+        <h2 id="sidebar-title">Rules set in stone</h2>
+        <p id="sidebar-empty">No tablets in this level.</p>
+        <ul id="rule-list"></ul>
+      </aside>
+    </div>
+
+    <div id="controls-hint">WASD / Arrow Keys to move</div>
+
+    <!-- ── Screens (overlaid over the whole page) ── -->
+    <div id="screen" class="screen hidden">
+      <div id="screen-start" class="screen-panel">
+        <p class="screen-eyebrow">A Puzzle Game</p>
+        <h1 class="screen-title">Stone<br />Tablets</h1>
+        <p class="screen-body">
+          Collect stone tablets to unlock new rules.<br />
+          Rules change how you move — for better or worse.
+        </p>
+        <button class="screen-btn" id="btn-start">Begin</button>
+        <p class="screen-hint">WASD / Arrow Keys to move</p>
+      </div>
+
+      <div id="screen-level-complete" class="screen-panel hidden">
+        <p class="screen-eyebrow">Level Complete</p>
+        <h2 class="screen-title" id="lc-level-name"></h2>
+        <p class="screen-body" id="lc-next-label"></p>
+        <button class="screen-btn" id="btn-next-level">Continue</button>
+      </div>
+
+      <div id="screen-game-complete" class="screen-panel hidden">
+        <p class="screen-eyebrow">You did it</p>
+        <h2 class="screen-title">All Levels<br />Complete</h2>
+        <p class="screen-body">You've mastered every stone tablet.</p>
+        <button class="screen-btn" id="btn-restart">Play Again</button>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>

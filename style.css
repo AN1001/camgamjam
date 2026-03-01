@@ -1,0 +1,362 @@
+/* ─────────────────────────────────────────────
+   Base Reset
+───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─────────────────────────────────────────────
+     Root Variables
+  ───────────────────────────────────────────── */
+:root {
+  --bg: #0b0b14;
+  --ui-bg: rgba(10, 10, 20, 0.85);
+  --ui-border: #2a2a4a;
+  --ui-text: #a0a0d0;
+  --ui-text-dim: #44446a;
+  --accent: #5e60ce;
+  --sidebar-w: 220px;
+  --font-pixel: "Courier New", monospace;
+}
+
+/* ─────────────────────────────────────────────
+     Page Layout
+  ───────────────────────────────────────────── */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Canvas + sidebar sit side by side */
+#layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+/* ─────────────────────────────────────────────
+     Canvas
+  ───────────────────────────────────────────── */
+#game-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 2px solid var(--ui-border);
+  box-shadow: 0 0 40px rgba(94, 96, 206, 0.2);
+}
+
+/* ─────────────────────────────────────────────
+     Sidebar
+  ───────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-height: 200px;
+  background: rgba(12, 12, 24, 0.95);
+  border: 1px solid var(--ui-border);
+  padding: 14px 12px;
+  font-family: var(--font-pixel);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#sidebar-title {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5a5a8a;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+#sidebar-empty {
+  font-size: 10px;
+  color: var(--ui-text-dim);
+  letter-spacing: 0.05em;
+}
+
+/* Rule list */
+#rule-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Individual rule card */
+.rule-card {
+  border: 1px solid var(--ui-border);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Inactive (not yet collected) ── */
+.rule-card.inactive {
+  background: rgba(20, 20, 35, 0.6);
+  opacity: 0.5;
+}
+
+.rule-card.inactive .rule-name {
+  color: #5a5a7a;
+}
+
+/* ── Active (collected) ── */
+.rule-card.active {
+  background: rgba(20, 20, 40, 0.9);
+}
+
+.rule-card.active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  background: var(--rule-color, #5e60ce);
+  pointer-events: none;
+}
+
+.rule-card.active {
+  border-color: var(--rule-color, #5e60ce);
+  box-shadow: 0 0 10px -2px var(--rule-color, #5e60ce);
+}
+
+/* Rule icon + name row */
+.rule-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rule-icon {
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+  font-family: var(--font-pixel);
+  min-width: 14px;
+  text-align: center;
+}
+
+.rule-name {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ui-text);
+  font-weight: bold;
+}
+
+/* Description */
+.rule-desc {
+  font-size: 9px;
+  color: var(--ui-text-dim);
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+}
+
+.rule-card.active .rule-desc {
+  color: #8080aa;
+}
+
+/* Status badge */
+.rule-status {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.rule-card.active .rule-status {
+  color: var(--rule-color, #5e60ce);
+}
+.rule-card.inactive .rule-status {
+  color: var(--ui-text-dim);
+}
+
+/* ─────────────────────────────────────────────
+     UI Overlay (top bar)
+  ───────────────────────────────────────────── */
+#ui-overlay {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 32px;
+  padding: 6px 20px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  color: var(--ui-text);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#level-name {
+  color: var(--accent);
+  line-height: 20px;
+}
+
+/* ─────────────────────────────────────────────
+   UI Buttons
+───────────────────────────────────────────── */
+.ui-btn {
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  margin-left: 16px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  /* Crucial: Re-enables clicking inside the disabled overlay */
+  pointer-events: auto;
+}
+
+.ui-btn:hover {
+  background: var(--ui-border);
+  color: #ffffff;
+}
+
+/* ─────────────────────────────────────────────
+     Controls Hint
+  ───────────────────────────────────────────── */
+#controls-hint {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: #3a3a5a;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+/* ─────────────────────────────────────────────
+     Screen Overlay
+  ───────────────────────────────────────────── */
+.screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 7, 16, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(3px);
+  animation: screen-fade-in 0.3s ease;
+}
+
+.screen.hidden {
+  display: none;
+}
+
+@keyframes screen-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.screen-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  font-family: var(--font-pixel);
+  animation: panel-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.screen-panel.hidden {
+  display: none;
+}
+
+@keyframes panel-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.screen-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #4a4a7a;
+}
+
+.screen-title {
+  font-size: 42px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #d0d0f0;
+  line-height: 1.1;
+  text-shadow: 0 0 40px rgba(94, 96, 206, 0.5), 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.screen-body {
+  font-size: 11px;
+  color: #5a5a8a;
+  letter-spacing: 0.08em;
+  line-height: 1.9;
+  max-width: 340px;
+}
+
+.screen-btn {
+  margin-top: 8px;
+  padding: 10px 36px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.screen-btn:hover {
+  background: var(--accent);
+  color: #0b0b14;
+  box-shadow: 0 0 20px rgba(94, 96, 206, 0.5);
+}
+
+.screen-hint {
+  font-size: 10px;
+  color: #2e2e4e;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#pos-display {
+  display: none;
+}
