@@ -9,21 +9,22 @@
   <body>
     <div id="ui-overlay">
       <span id="level-name">Level 1</span>
-      <span id="pos-display">0, 0</span>
-      <button id="btn-restart-level" class="ui-btn">Restart</button>
+      <button id="btn-restart-level">Restart</button>
     </div>
 
     <div id="layout">
       <canvas id="game-canvas"></canvas>
 
       <aside id="sidebar">
-        <h2 id="sidebar-title">Rules set in stone</h2>
+        <h2 id="sidebar-title">Rules</h2>
         <p id="sidebar-empty">No tablets in this level.</p>
         <ul id="rule-list"></ul>
       </aside>
     </div>
 
-    <div id="controls-hint">WASD / Arrow Keys to move</div>
+    <div id="controls-hint">
+      WASD / Arrow Keys to move &nbsp;·&nbsp; R to restart
+    </div>
 
     <!-- ── Screens (overlaid over the whole page) ── -->
     <div id="screen" class="screen hidden">
