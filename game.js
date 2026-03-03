@@ -3,11 +3,11 @@
    Add levels here in order. { path, name }
 ═══════════════════════════════════════════════════════════ */
 const LEVELS = [
-  { path: "levels/level1.txt", name: "Level 1" },
-  { path: "levels/level2.txt", name: "Level 2" },
-  { path: "levels/level3.txt", name: "Level 3" },
-  { path: "levels/level4.txt", name: "Level 4" },
-  { path: "levels/level5.txt", name: "Level 5" },
+  { path: "static/levels/level1.txt", name: "Level 1" },
+  { path: "static/levels/level2.txt", name: "Level 2" },
+  { path: "static/levels/level3.txt", name: "Level 3" },
+  { path: "static/levels/level4.txt", name: "Level 4" },
+  { path: "static/levels/level5.txt", name: "Level 5" },
   // Add more levels here — progression is automatic.
 ];
 
