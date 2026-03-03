@@ -220,7 +220,7 @@ function createPlayer(x, y) {
      REPEAT_DELAY ms before firing again every REPEAT_INTERVAL ms.
   ═══════════════════════════════════════════════════════════ */
 const Input = (() => {
-  const REPEAT_DELAY = 100; // ms after first press before repeat begins
+  const REPEAT_DELAY = 200; // ms after first press before repeat begins
   const REPEAT_INTERVAL = 150; // ms between each repeated step
 
   const held = new Set();
