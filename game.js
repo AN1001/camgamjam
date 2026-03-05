@@ -1,4 +1,15 @@
 /* ═══════════════════════════════════════════════════════════
+   CONFIG
+   Central place for all tunable constants.
+═══════════════════════════════════════════════════════════ */
+const CONFIG = {
+  TILE_SIZE: 32,          // px per grid cell
+  REPEAT_DELAY: 200,      // ms after first keydown before held-key repeat begins
+  REPEAT_INTERVAL: 150,   // ms between each repeated step while held
+  PLAYER_PULSE: 0.72,     // static pulse offset for player centre (Math.sin(0.5) ≈ 0.479, using fixed 0.72)
+};
+
+/* ═══════════════════════════════════════════════════════════
    LEVELS PLAYLIST
    Add levels here in order. { path, name }
 ═══════════════════════════════════════════════════════════ */
@@ -227,8 +238,8 @@ function createPlayer(x, y) {
      REPEAT_DELAY ms before firing again every REPEAT_INTERVAL ms.
   ═══════════════════════════════════════════════════════════ */
 const Input = (() => {
-  const REPEAT_DELAY = 200; // ms after first press before repeat begins
-  const REPEAT_INTERVAL = 150; // ms between each repeated step
+  const REPEAT_DELAY = CONFIG.REPEAT_DELAY;
+  const REPEAT_INTERVAL = CONFIG.REPEAT_INTERVAL;
 
   const held = new Set();
   const consumed = new Set(); // for justPressed
@@ -286,10 +297,12 @@ const Screen = (() => {
   const panelStart = document.getElementById("screen-start");
   const panelLevelDone = document.getElementById("screen-level-complete");
   const panelGameDone = document.getElementById("screen-game-complete");
+  const panelError = document.getElementById("screen-error");
   const lcLevelName = document.getElementById("lc-level-name");
   const lcNextLabel = document.getElementById("lc-next-label");
+  const errorMessage = document.getElementById("error-message");
 
-  const panels = [panelStart, panelLevelDone, panelGameDone];
+  const panels = [panelStart, panelLevelDone, panelGameDone, panelError];
 
   function showPanel(panel) {
     overlay.classList.remove("hidden");
@@ -319,7 +332,12 @@ const Screen = (() => {
     showPanel(panelGameDone);
   }
 
-  return { showStart, showLevelComplete, showGameComplete, hide };
+  function showError(msg) {
+    errorMessage.textContent = msg;
+    showPanel(panelError);
+  }
+
+  return { showStart, showLevelComplete, showGameComplete, showError, hide };
 })();
 
 /* ═══════════════════════════════════════════════════════════
@@ -371,7 +389,7 @@ const Sidebar = (() => {
      All draw functions are pure — they take (ctx, px, py, ...)
      and never read game state directly.
   ═══════════════════════════════════════════════════════════ */
-const TILE_SIZE = 32;
+const TILE_SIZE = CONFIG.TILE_SIZE;
 
 // ── Cheap deterministic hash for per-tile visual variation ──
 function tileHash(x, y) {
@@ -732,8 +750,8 @@ function renderPlayer(ctx, player, time) {
   ctx.strokeStyle = player.borderColor;
   ctx.lineWidth = 2;
   ctx.strokeRect(px + 6, py + 6, T - 12, T - 12);
-  // Gentle pulsing centre
-  const pulseOffset = Math.sin(0.5) * 1.5; // fixed value, no animation
+  // Static centre highlight — size fixed by CONFIG.PLAYER_PULSE
+  const pulseOffset = CONFIG.PLAYER_PULSE;
   ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
   ctx.fillRect(
     px + 12 - pulseOffset,
@@ -756,6 +774,11 @@ const Game = (() => {
   const canvas = document.getElementById("game-canvas");
   const ctx = canvas.getContext("2d");
   const nameEl = document.getElementById("level-name");
+  const btnStart = document.getElementById("btn-start");
+  const btnNextLevel = document.getElementById("btn-next-level");
+  const btnRestart = document.getElementById("btn-restart");
+  const btnRestartLevel = document.getElementById("btn-restart-level");
+  const btnRetry = document.getElementById("btn-retry");
 
   let level = null;
   let player = null;
@@ -802,13 +825,22 @@ const Game = (() => {
     }
     Screen.showLevelComplete(LEVELS[levelIndex].name, LEVELS[nextIndex].name);
 
-    const btn = document.getElementById("btn-next-level");
-    btn.onclick = async () => {
+    async function advance() {
+      // Remove both handlers so advance can only fire once
+      window.removeEventListener("keydown", onEnter);
+      btnNextLevel.onclick = null;
       levelIndex = nextIndex;
       await loadAndStart(LEVELS[levelIndex].path, LEVELS[levelIndex].name);
       Screen.hide();
       accepting = true;
-    };
+    }
+
+    function onEnter(e) {
+      if (e.code === "Enter") advance();
+    }
+
+    btnNextLevel.onclick = advance;
+    window.addEventListener("keydown", onEnter);
   }
 
   // ── Input → rule pipeline → execute steps ──────────────────
@@ -849,13 +881,19 @@ const Game = (() => {
 
   // ── Load a level and reset state ────────────────────────────
   async function loadAndStart(path, displayName) {
-    level = await loadLevel(path, displayName);
+    try {
+      level = await loadLevel(path, displayName);
+    } catch (err) {
+      Screen.showError(`Could not load "${displayName}".\n${err.message}`);
+      btnRetry.onclick = () => loadAndStart(path, displayName);
+      return false;
+    }
     player = createPlayer(level.spawnX, level.spawnY);
     RuleEngine.clear();
     resizeCanvas();
     Sidebar.init(level);
     nameEl.textContent = level.name;
-    console.log(`Loaded "${level.name}" — ${level.width}×${level.height}`);
+    return true;
   }
 
   // ── Restart the current level from scratch ─────────────────
@@ -872,21 +910,22 @@ const Game = (() => {
 
   // ── Boot ────────────────────────────────────────────────────
   async function init() {
-    await loadAndStart(LEVELS[0].path, LEVELS[0].name);
+    const ok = await loadAndStart(LEVELS[0].path, LEVELS[0].name);
+    if (!ok) return;
     requestAnimationFrame(loop);
 
     // Start screen
     Screen.showStart();
-    document.getElementById("btn-start").onclick = () => {
+    btnStart.onclick = () => {
       Screen.hide();
       accepting = true;
     };
 
     // Restart current level (in-game button, always available)
-    document.getElementById("btn-restart-level").onclick = () => restartLevel();
+    btnRestartLevel.onclick = () => restartLevel();
 
     // Game-complete restart button
-    document.getElementById("btn-restart").onclick = async () => {
+    btnRestart.onclick = async () => {
       levelIndex = 0;
       await loadAndStart(LEVELS[0].path, LEVELS[0].name);
       Screen.hide();

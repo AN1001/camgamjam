@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pixel Game</title>
+    <title>Unbound Rules</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -30,9 +30,9 @@
     <div id="screen" class="screen hidden">
       <div id="screen-start" class="screen-panel">
         <p class="screen-eyebrow">A Puzzle Game</p>
-        <h1 class="screen-title">Stone<br />Tablets</h1>
+        <h1 class="screen-title">Unbound<br />Rules</h1>
         <p class="screen-body">
-          Collect stone tablets to unlock new rules.<br />
+          Collect tablets to unlock new rules.<br />
           Rules change how you move — for better or worse.
         </p>
         <button class="screen-btn" id="btn-start">Begin</button>
@@ -44,13 +44,21 @@
         <h2 class="screen-title" id="lc-level-name"></h2>
         <p class="screen-body" id="lc-next-label"></p>
         <button class="screen-btn" id="btn-next-level">Continue</button>
+        <p class="screen-hint">or press Enter</p>
       </div>
 
       <div id="screen-game-complete" class="screen-panel hidden">
         <p class="screen-eyebrow">You did it</p>
         <h2 class="screen-title">All Levels<br />Complete</h2>
-        <p class="screen-body">You've mastered every stone tablet.</p>
+        <p class="screen-body">You've mastered every rule.</p>
         <button class="screen-btn" id="btn-restart">Play Again</button>
+      </div>
+
+      <div id="screen-error" class="screen-panel hidden">
+        <p class="screen-eyebrow">Error</p>
+        <h2 class="screen-title">Failed to<br />Load Level</h2>
+        <p class="screen-body" id="error-message">Something went wrong.</p>
+        <button class="screen-btn" id="btn-retry">Retry</button>
       </div>
     </div>
 
