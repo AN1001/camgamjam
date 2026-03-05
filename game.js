@@ -37,6 +37,13 @@ const RULES = {
     priority: 10,
     applyToMoves: (moves) => moves.filter((m) => !(m.dx === -1 && m.dy === 0)),
   },
+  6: {
+    name: "No Up",
+    description: "You cannot move Up.",
+    color: "#ce4a4a",
+    priority: 10,
+    applyToMoves: (moves) => moves.filter((m) => !(m.dx === 0 && m.dy === -1)),
+  },
   3: {
     name: "No Right",
     description: "You cannot move right.",
@@ -58,7 +65,7 @@ const RULES = {
     name: "Flip Y",
     description: "Up and down are swapped.",
     color: "#4ace7a",
-    priority: 20,
+    priority: 25,
     applyToMoves: (moves) => moves.map((m) => ({ dx: m.dx, dy: -m.dy })),
   },
   5: {
